@@ -43,9 +43,16 @@ def _get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
-def generate_summary(client: Client, greeting: str = "Morning") -> str:
+def generate_summary(
+    client: Client,
+    greeting: str = "Morning",
+    custom_instructions: str = "",
+    diff_data: dict = None,
+) -> str:
     """Generate a single executive summary email for a client."""
-    system_prompt, user_message = build_prompt(client, greeting)
+    system_prompt, user_message = build_prompt(
+        client, greeting, custom_instructions=custom_instructions, diff_data=diff_data
+    )
 
     anthropic_client = _get_client()
 
@@ -76,6 +83,8 @@ def generate_summary(client: Client, greeting: str = "Morning") -> str:
 async def generate_all(
     clients: list[Client],
     greeting: str = "Morning",
+    custom_instructions: str = "",
+    diff_data: dict = None,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> dict[str, str]:
     """Generate summaries for all clients in parallel.
@@ -83,6 +92,8 @@ async def generate_all(
     Args:
         clients: List of Client objects to generate for.
         greeting: "Morning" or "Afternoon".
+        custom_instructions: Optional additional instructions for the prompt.
+        diff_data: Optional week-over-week diff data.
         progress_callback: Called with company_name after each completion.
 
     Returns:
@@ -95,7 +106,9 @@ async def generate_all(
     async def gen_one(client: Client) -> tuple[str, str | None, str | None]:
         async with semaphore:
             try:
-                result = await asyncio.to_thread(generate_summary, client, greeting)
+                result = await asyncio.to_thread(
+                    generate_summary, client, greeting, custom_instructions, diff_data
+                )
                 if progress_callback:
                     progress_callback(client.company_name)
                 return client.company_name, result, None

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from diff_engine import build_snapshot, diff_snapshots, json_to_snapshot, snapshot_to_json, summarise_diff
 from filters import filter_all_candidates
 from generator import generate_all, generate_summary
 from parser import group_by_client, parse_workbooks
@@ -443,16 +444,153 @@ with st.sidebar:
 
     include_finalised = st.checkbox("Include finalised cases", value=False)
 
+    st.divider()
+    with st.expander("Advanced Settings"):
+        custom_instructions = st.text_area(
+            "Custom instructions",
+            value=st.session_state.get("custom_instructions", ""),
+            placeholder="Add special instructions (e.g., 'Use a more formal tone', 'Sign off as Sarah instead of Joe')",
+            height=100,
+            key="custom_instructions_input",
+        )
+        st.session_state["custom_instructions"] = custom_instructions
+        if st.button("Reset instructions", key="reset_instructions"):
+            st.session_state["custom_instructions"] = ""
+            st.rerun()
+
+        st.markdown("---")
+        st.markdown("<small style='color:#888;'>Snapshot Backup</small>", unsafe_allow_html=True)
+
+        # Download current snapshot (only visible after data is loaded)
+        if st.session_state.get("current_snapshot"):
+            snapshot_json = snapshot_to_json(st.session_state["current_snapshot"])
+            st.download_button(
+                "Download snapshot",
+                data=snapshot_json,
+                file_name="yakr_snapshot.json",
+                mime="application/json",
+                key="download_snapshot",
+            )
+
+        # Upload a previous snapshot
+        uploaded_snap = st.file_uploader(
+            "Restore snapshot",
+            type=["json"],
+            key="snapshot_upload",
+            label_visibility="collapsed",
+            help="Upload a previously downloaded snapshot to restore diff comparison",
+        )
+        if uploaded_snap:
+            snap_data = json_to_snapshot(uploaded_snap.getvalue().decode("utf-8"))
+            if snap_data:
+                st.session_state["uploaded_snapshot"] = snap_data
+                st.markdown("<small style='color:#0ae57d;'>Snapshot loaded</small>", unsafe_allow_html=True)
+            else:
+                st.markdown("<small style='color:#ff004f;'>Invalid snapshot file</small>", unsafe_allow_html=True)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def read_local_storage(key: str):
+    """Read a value from browser localStorage via streamlit-js-eval."""
+    try:
+        from streamlit_js_eval import streamlit_js_eval
+        result = streamlit_js_eval(js_expressions=f"localStorage.getItem('{key}')")
+        return result
+    except Exception:
+        return None
+
+
+def write_local_storage(key: str, value: str):
+    """Write a value to browser localStorage via streamlit-js-eval."""
+    try:
+        from streamlit_js_eval import streamlit_js_eval
+        import json
+        escaped = json.dumps(value)
+        streamlit_js_eval(js_expressions=f"localStorage.setItem('{key}', {escaped})")
+    except Exception:
+        pass
+
 
 def save_uploaded_file(uploaded_file) -> Path:
     suffix = Path(uploaded_file.name).suffix
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(uploaded_file.getvalue())
         return Path(tmp.name)
+
+
+def render_html_email(text: str) -> str:
+    """Convert plain-text email to HTML suitable for Outlook paste."""
+    import html as html_module
+    import re
+    escaped = html_module.escape(text)
+    # Bold candidate name headings (lines that look like a name — no prefix, followed by a newline)
+    # Also handle **bold** markdown
+    escaped = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped)
+    lines = escaped.split('\n')
+    html_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            html_lines.append('<br>')
+        else:
+            html_lines.append(f'{line}<br>')
+    body = '\n'.join(html_lines)
+    return f'<div style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #222;">{body}</div>'
+
+
+def render_outlook_copy_button(text: str, key: str):
+    """Render a 'Copy for Outlook' button that copies HTML to clipboard."""
+    import json
+    html_content = render_html_email(text)
+    # JSON-encode the HTML to safely inject into JavaScript
+    html_json = json.dumps(html_content)
+    st.components.v1.html(f"""
+        <button id="copy-btn-{key}"
+            onclick="copyHTML_{key}()"
+            style="
+                background: #000; color: #fff; border: none; border-radius: 8px;
+                padding: 8px 20px; font-family: Satoshi, Arial, sans-serif;
+                font-weight: 600; font-size: 14px; cursor: pointer;
+                transition: all 0.2s ease;
+            "
+            onmouseover="this.style.background='#333'"
+            onmouseout="this.style.background='#000'"
+        >Copy for Outlook</button>
+        <script>
+        async function copyHTML_{key}() {{
+            const htmlContent = {html_json};
+            try {{
+                const blob = new Blob([htmlContent], {{type: 'text/html'}});
+                const plainBlob = new Blob([{json.dumps(text)}], {{type: 'text/plain'}});
+                const item = new ClipboardItem({{
+                    'text/html': blob,
+                    'text/plain': plainBlob
+                }});
+                await navigator.clipboard.write([item]);
+                const btn = document.getElementById('copy-btn-{key}');
+                btn.textContent = 'Copied!';
+                btn.style.background = '#059040';
+                setTimeout(() => {{
+                    btn.textContent = 'Copy for Outlook';
+                    btn.style.background = '#000';
+                }}, 2000);
+            }} catch (err) {{
+                // Fallback to plain text copy
+                try {{
+                    await navigator.clipboard.writeText({json.dumps(text)});
+                    const btn = document.getElementById('copy-btn-{key}');
+                    btn.textContent = 'Copied (plain text)';
+                    setTimeout(() => {{ btn.textContent = 'Copy for Outlook'; }}, 2000);
+                }} catch (e) {{
+                    alert('Copy failed — please select the text and copy manually.');
+                }}
+            }}
+        }}
+        </script>
+    """, height=50)
 
 
 def render_client_table(clients, sorted_names):
@@ -515,9 +653,39 @@ if vm_file and cp_file:
         candidates = parse_workbooks(vm_path, cp_path)
         candidates = filter_all_candidates(candidates)
         clients = group_by_client(candidates)
-        return clients
+        return clients, candidates
 
-    clients = load_data(vm_file.getvalue(), cp_file.getvalue(), vm_file.name, cp_file.name)
+    clients, all_candidates = load_data(vm_file.getvalue(), cp_file.getvalue(), vm_file.name, cp_file.name)
+
+    # --- Week-over-Week Diff ---
+    current_snapshot = build_snapshot(all_candidates)
+
+    # Try to load previous snapshot from localStorage or uploaded file
+    if "uploaded_snapshot" in st.session_state and st.session_state["uploaded_snapshot"]:
+        prev_snapshot = st.session_state["uploaded_snapshot"]
+    elif "prev_snapshot_loaded" not in st.session_state:
+        prev_json = read_local_storage("yakr_snapshot")
+        if prev_json:
+            prev_snapshot = json_to_snapshot(prev_json)
+            st.session_state["prev_snapshot_cache"] = prev_snapshot
+        else:
+            prev_snapshot = None
+        st.session_state["prev_snapshot_loaded"] = True
+    else:
+        prev_snapshot = st.session_state.get("prev_snapshot_cache")
+
+    if prev_snapshot:
+        diff_result = diff_snapshots(prev_snapshot, current_snapshot)
+        st.session_state["diff_data"] = diff_result
+        summary = summarise_diff(diff_result)
+        diff_date = diff_result.get("snapshot_date", "unknown")
+    else:
+        st.session_state["diff_data"] = None
+        summary = None
+        diff_date = None
+
+    # Store current snapshot in session for saving after generation
+    st.session_state["current_snapshot"] = current_snapshot
 
     if not include_finalised:
         clients = {
@@ -549,6 +717,20 @@ if vm_file and cp_file:
             type="primary",
             use_container_width=True,
         )
+
+        # Diff indicator
+        if summary:
+            st.markdown(
+                f"<small style='color:#0ae57d;'>vs. {diff_date} &middot; "
+                f"{summary['changed']} changed &middot; {summary['new']} new &middot; "
+                f"{summary['unchanged']} unchanged</small>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                "<small style='color:#666;'>No previous data — diff available next week</small>",
+                unsafe_allow_html=True,
+            )
 
         # Sidebar footer
         st.markdown("""
@@ -629,8 +811,18 @@ if vm_file and cp_file:
                 )
 
             client_list = [clients[n] for n in sorted_names]
-            results = asyncio.run(generate_all(client_list, greeting, on_progress))
+            ci = st.session_state.get("custom_instructions", "")
+            diff = st.session_state.get("diff_data")
+            results = asyncio.run(generate_all(
+                client_list, greeting,
+                custom_instructions=ci, diff_data=diff,
+                progress_callback=on_progress,
+            ))
             progress_bar.progress(1.0, text="All summaries generated")
+
+            # Save snapshot to localStorage for next week's diff
+            if st.session_state.get("current_snapshot"):
+                write_local_storage("yakr_snapshot", snapshot_to_json(st.session_state["current_snapshot"]))
 
             if results:
                 tabs = st.tabs(list(results.keys()))
@@ -638,6 +830,7 @@ if vm_file and cp_file:
                 for tab, (name, text) in zip(tabs, results.items()):
                     with tab:
                         render_email_preview(text, name)
+                        render_outlook_copy_button(text, key=f"copy_{name}")
                         st.text_area(
                             "Edit draft",
                             value=text,
@@ -661,10 +854,20 @@ if vm_file and cp_file:
             if selected_client:
                 with st.spinner(""):
                     try:
-                        result = generate_summary(selected_client, greeting)
+                        ci = st.session_state.get("custom_instructions", "")
+                        diff = st.session_state.get("diff_data")
+                        result = generate_summary(
+                            selected_client, greeting,
+                            custom_instructions=ci, diff_data=diff,
+                        )
+
+                        # Save snapshot to localStorage for next week's diff
+                        if st.session_state.get("current_snapshot"):
+                            write_local_storage("yakr_snapshot", snapshot_to_json(st.session_state["current_snapshot"]))
 
                         st.markdown("<br>", unsafe_allow_html=True)
                         render_email_preview(result, selected_client.display_name)
+                        render_outlook_copy_button(result, key="copy_single")
 
                         st.markdown("<br>", unsafe_allow_html=True)
                         with st.expander("Edit draft", expanded=False):
