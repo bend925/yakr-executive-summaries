@@ -459,7 +459,35 @@ with st.sidebar:
             st.rerun()
 
         st.markdown("---")
-        st.markdown("<small style='color:#888;'>Snapshot Backup</small>", unsafe_allow_html=True)
+        st.markdown("<small style='color:#888;'>Week-over-Week Snapshot</small>", unsafe_allow_html=True)
+
+        # Show localStorage status
+        if st.session_state.get("prev_snapshot_cache"):
+            snap = st.session_state["prev_snapshot_cache"]
+            snap_date = snap.get("snapshot_date", "unknown")
+            snap_count = len(snap.get("candidates", {}))
+            st.markdown(
+                f"<small style='color:#0ae57d;'>Previous snapshot: {snap_date} ({snap_count} candidates)</small>",
+                unsafe_allow_html=True,
+            )
+        elif st.session_state.get("uploaded_snapshot"):
+            snap = st.session_state["uploaded_snapshot"]
+            snap_date = snap.get("snapshot_date", "unknown")
+            st.markdown(
+                f"<small style='color:#0ae57d;'>Uploaded snapshot: {snap_date}</small>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                "<small style='color:#666;'>No previous snapshot found in browser</small>",
+                unsafe_allow_html=True,
+            )
+
+        if st.session_state.get("snapshot_saved"):
+            st.markdown(
+                "<small style='color:#0ae57d;'>Current data saved to browser</small>",
+                unsafe_allow_html=True,
+            )
 
         # Download current snapshot (only visible after data is loaded)
         if st.session_state.get("current_snapshot"):
@@ -484,7 +512,9 @@ with st.sidebar:
             snap_data = json_to_snapshot(uploaded_snap.getvalue().decode("utf-8"))
             if snap_data:
                 st.session_state["uploaded_snapshot"] = snap_data
+                st.session_state.pop("prev_snapshot_cache", None)
                 st.markdown("<small style='color:#0ae57d;'>Snapshot loaded</small>", unsafe_allow_html=True)
+                st.rerun()
             else:
                 st.markdown("<small style='color:#ff004f;'>Invalid snapshot file</small>", unsafe_allow_html=True)
 
@@ -663,16 +693,20 @@ if vm_file and cp_file:
     # Try to load previous snapshot from localStorage or uploaded file
     if "uploaded_snapshot" in st.session_state and st.session_state["uploaded_snapshot"]:
         prev_snapshot = st.session_state["uploaded_snapshot"]
-    elif "prev_snapshot_loaded" not in st.session_state:
+    elif "prev_snapshot_cache" in st.session_state:
+        prev_snapshot = st.session_state["prev_snapshot_cache"]
+    else:
+        # streamlit-js-eval can return None on first render cycle (JS hasn't executed yet)
+        # We retry on each rerun until we get a result or confirm there's nothing stored
         prev_json = read_local_storage("yakr_snapshot")
-        if prev_json:
+        if prev_json and prev_json != "null":
             prev_snapshot = json_to_snapshot(prev_json)
-            st.session_state["prev_snapshot_cache"] = prev_snapshot
+            if prev_snapshot:
+                st.session_state["prev_snapshot_cache"] = prev_snapshot
+            else:
+                prev_snapshot = None
         else:
             prev_snapshot = None
-        st.session_state["prev_snapshot_loaded"] = True
-    else:
-        prev_snapshot = st.session_state.get("prev_snapshot_cache")
 
     if prev_snapshot:
         diff_result = diff_snapshots(prev_snapshot, current_snapshot)
@@ -823,6 +857,7 @@ if vm_file and cp_file:
             # Save snapshot to localStorage for next week's diff
             if st.session_state.get("current_snapshot"):
                 write_local_storage("yakr_snapshot", snapshot_to_json(st.session_state["current_snapshot"]))
+                st.session_state["snapshot_saved"] = True
 
             if results:
                 tabs = st.tabs(list(results.keys()))
@@ -864,6 +899,7 @@ if vm_file and cp_file:
                         # Save snapshot to localStorage for next week's diff
                         if st.session_state.get("current_snapshot"):
                             write_local_storage("yakr_snapshot", snapshot_to_json(st.session_state["current_snapshot"]))
+                            st.session_state["snapshot_saved"] = True
 
                         st.markdown("<br>", unsafe_allow_html=True)
                         render_email_preview(result, selected_client.display_name)
