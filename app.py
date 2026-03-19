@@ -395,52 +395,53 @@ st.markdown(f"""
         font-size: 0.9rem !important;
     }}
 
-    /* Sidebar expander — visible on dark background */
-    section[data-testid="stSidebar"] [data-testid="stExpander"] {{
+    /* ---- SIDEBAR DARK THEME OVERRIDES ---- */
+
+    /* Force ALL text/labels/spans inside sidebar to white */
+    section[data-testid="stSidebar"] * {{
+        color: white !important;
+    }}
+
+    /* Expander — dark background for both header and content */
+    section[data-testid="stSidebar"] details {{
         background-color: #1a1a1a !important;
         border: 1px solid #333 !important;
-        border-radius: 8px;
+        border-radius: 8px !important;
     }}
-    section[data-testid="stSidebar"] [data-testid="stExpander"] summary,
-    section[data-testid="stSidebar"] [data-testid="stExpander"] summary span,
-    section[data-testid="stSidebar"] [data-testid="stExpander"] summary p {{
+    section[data-testid="stSidebar"] details summary {{
         color: white !important;
         font-weight: 600 !important;
     }}
-    section[data-testid="stSidebar"] [data-testid="stExpander"] svg {{
+    section[data-testid="stSidebar"] details summary svg {{
         fill: white !important;
-        color: white !important;
+        stroke: white !important;
     }}
-
-    /* Sidebar secondary buttons — visible on dark background */
-    section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {{
-        background-color: #333 !important;
-        color: white !important;
-        border: 1px solid #555 !important;
-        border-radius: 8px;
-    }}
-    section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]):hover {{
-        background-color: #444 !important;
-        border-color: #777 !important;
-    }}
-
-    /* Sidebar download button — visible on dark background */
-    section[data-testid="stSidebar"] .stDownloadButton > button {{
-        background-color: #333 !important;
-        color: white !important;
-        border: 1px solid #555 !important;
-    }}
-    section[data-testid="stSidebar"] .stDownloadButton > button:hover {{
-        background-color: #444 !important;
-        border-color: #777 !important;
-    }}
-
-    /* Sidebar text area — visible on dark background */
-    section[data-testid="stSidebar"] textarea {{
+    /* Expander content area — prevent white background */
+    section[data-testid="stSidebar"] details > div {{
         background-color: #1a1a1a !important;
+    }}
+    section[data-testid="stSidebar"] details[open] > div {{
+        background-color: #1a1a1a !important;
+    }}
+
+    /* All buttons in sidebar (except Generate) */
+    section[data-testid="stSidebar"] button:not([kind="primary"]) {{
+        background-color: #333 !important;
+        color: white !important;
+        border: 1px solid #555 !important;
+        border-radius: 8px !important;
+    }}
+    section[data-testid="stSidebar"] button:not([kind="primary"]):hover {{
+        background-color: #444 !important;
+        border-color: #777 !important;
+    }}
+
+    /* Text area — dark background */
+    section[data-testid="stSidebar"] textarea {{
+        background-color: #222 !important;
         color: white !important;
         border-color: #444 !important;
-        border-radius: 8px;
+        border-radius: 8px !important;
     }}
     section[data-testid="stSidebar"] textarea:focus {{
         border-color: var(--yakr-red) !important;
@@ -450,27 +451,27 @@ st.markdown(f"""
         color: #888 !important;
     }}
 
-    /* Sidebar radio buttons — visible on dark background */
-    section[data-testid="stSidebar"] [data-testid="stRadio"] > div {{
+    /* Checkbox — make label and box visible */
+    section[data-testid="stSidebar"] [data-testid="stCheckbox"] {{
+        color: white !important;
+    }}
+    section[data-testid="stSidebar"] [data-testid="stCheckbox"] label p,
+    section[data-testid="stSidebar"] [data-testid="stCheckbox"] label span,
+    section[data-testid="stSidebar"] [data-testid="stCheckbox"] label div {{
+        color: white !important;
+    }}
+
+    /* Radio — dark container */
+    section[data-testid="stSidebar"] [data-testid="stRadio"] > div > div {{
         background-color: #1a1a1a;
         border-radius: 8px;
         padding: 8px 12px;
         border: 1px solid #333;
     }}
-    section[data-testid="stSidebar"] [role="radiogroup"] label {{
-        color: white !important;
-    }}
-    section[data-testid="stSidebar"] [role="radiogroup"] label > div:first-child {{
-        border-color: #666 !important;
-    }}
-    section[data-testid="stSidebar"] [role="radiogroup"] label[data-checked="true"] > div:first-child {{
-        background-color: var(--yakr-red) !important;
-        border-color: var(--yakr-red) !important;
-    }}
 
-    /* Sidebar checkbox — visible on dark background */
-    section[data-testid="stSidebar"] [data-testid="stCheckbox"] label span {{
-        color: white !important;
+    /* Small/muted text overrides (status indicators) */
+    section[data-testid="stSidebar"] small {{
+        color: inherit !important;
     }}
 </style>
 """, unsafe_allow_html=True)
