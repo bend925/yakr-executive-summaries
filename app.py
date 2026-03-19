@@ -630,6 +630,14 @@ def save_uploaded_file(uploaded_file) -> Path:
         return Path(tmp.name)
 
 
+def cleanup_temp_files(*paths: Path):
+    for p in paths:
+        try:
+            p.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
 def render_html_email(text: str) -> str:
     """Convert plain-text email to HTML suitable for Outlook paste."""
     import html as html_module
@@ -759,10 +767,13 @@ if vm_file and cp_file:
     def load_data(_vm_bytes: bytes, _cp_bytes: bytes, vm_name: str, cp_name: str):
         vm_path = save_uploaded_file(vm_file)
         cp_path = save_uploaded_file(cp_file)
-        candidates = parse_workbooks(vm_path, cp_path)
-        candidates = filter_all_candidates(candidates)
-        clients = group_by_client(candidates)
-        return clients, candidates
+        try:
+            candidates = parse_workbooks(vm_path, cp_path)
+            candidates = filter_all_candidates(candidates)
+            clients = group_by_client(candidates)
+            return clients, candidates
+        finally:
+            cleanup_temp_files(vm_path, cp_path)
 
     clients, all_candidates = load_data(vm_file.getvalue(), cp_file.getvalue(), vm_file.name, cp_file.name)
 
@@ -938,7 +949,9 @@ if vm_file and cp_file:
                 write_local_storage("yakr_snapshot", snapshot_to_json(st.session_state["current_snapshot"]))
                 st.session_state["snapshot_saved"] = True
 
-            if results:
+            if not results:
+                st.error("No summaries could be generated. Check your API key and try again.")
+            elif results:
                 tabs = st.tabs(list(results.keys()))
                 all_text_parts = []
                 for tab, (name, text) in zip(tabs, results.items()):

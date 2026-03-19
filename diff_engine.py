@@ -106,6 +106,8 @@ def diff_snapshots(previous: dict, current: dict) -> dict:
                 candidate_changes.append(
                     f"SA progress updated to {int(curr['sa_progress'] * 100)}%"
                 )
+            elif prev["sa_progress"] is not None:
+                candidate_changes.append("SA progress data no longer available")
 
         # Sheet source change (e.g. Preparing → Processing)
         if prev["sheet_source"] != curr["sheet_source"]:

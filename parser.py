@@ -74,7 +74,11 @@ def _valid_file_name(val: Any) -> Optional[str]:
 
 
 def _build_col_map(header_row: tuple) -> dict[str, int]:
-    """Build a column-name-to-index map from a header row."""
+    """Build a column-name-to-index map from a header row.
+
+    Stores exact-case keys. _get() falls back to case-insensitive lookup
+    so minor header casing differences in spreadsheets don't silently break parsing.
+    """
     col_map = {}
     for i, cell in enumerate(header_row):
         if cell is not None:
@@ -83,8 +87,15 @@ def _build_col_map(header_row: tuple) -> dict[str, int]:
 
 
 def _get(row: tuple, col_map: dict, col_name: str, default: Any = None) -> Any:
-    """Get a value from a row by column name."""
+    """Get a value from a row by column name. Falls back to case-insensitive match."""
     idx = col_map.get(col_name)
+    if idx is None:
+        # Case-insensitive fallback
+        col_name_lower = col_name.lower()
+        for key, i in col_map.items():
+            if key.lower() == col_name_lower:
+                idx = i
+                break
     if idx is None or idx >= len(row):
         return default
     return row[idx]
@@ -102,6 +113,8 @@ def _parse_candidate_sheet(ws, sheet_source: str) -> dict[str, Candidate]:
         return candidates
 
     col_map = _build_col_map(rows[0])
+    if not col_map:
+        logger.warning(f"Sheet '{ws.title}' has an empty or unreadable header row — skipping")
 
     for row in rows[1:]:
         fn = _valid_file_name(_get(row, col_map, "File_Name"))
@@ -157,8 +170,10 @@ def _parse_sa_sheet(ws) -> dict[str, dict]:
         if not fn:
             continue
 
+        raw_progress = _parse_float(_get(row, col_map, "Progress"))
+        sa_progress = max(0.0, min(1.0, raw_progress)) if raw_progress is not None else None
         sa_data[fn] = {
-            "sa_progress": _parse_float(_get(row, col_map, "Progress")),
+            "sa_progress": sa_progress,
             "sa_notes": _str(_get(row, col_map, "Notes")),
             "occupation": _str(_get(row, col_map, "Occupation")),
             "acts": _parse_float(_get(row, col_map, "ACTS")),

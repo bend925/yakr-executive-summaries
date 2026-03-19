@@ -65,9 +65,9 @@ def generate_summary(
                 messages=[{"role": "user", "content": user_message}],
             )
             return response.content[0].text
-        except anthropic.RateLimitError:
+        except (anthropic.RateLimitError, anthropic.APIConnectionError) as e:
             wait = 2 ** attempt
-            logger.warning(f"Rate limited, retrying in {wait}s (attempt {attempt + 1})")
+            logger.warning(f"Transient error ({type(e).__name__}), retrying in {wait}s (attempt {attempt + 1})")
             time.sleep(wait)
         except anthropic.APIError as e:
             if attempt < MAX_RETRIES - 1:
