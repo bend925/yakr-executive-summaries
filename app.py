@@ -394,6 +394,84 @@ st.markdown(f"""
         font-weight: 600 !important;
         font-size: 0.9rem !important;
     }}
+
+    /* Sidebar expander — visible on dark background */
+    section[data-testid="stSidebar"] [data-testid="stExpander"] {{
+        background-color: #1a1a1a !important;
+        border: 1px solid #333 !important;
+        border-radius: 8px;
+    }}
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary span,
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary p {{
+        color: white !important;
+        font-weight: 600 !important;
+    }}
+    section[data-testid="stSidebar"] [data-testid="stExpander"] svg {{
+        fill: white !important;
+        color: white !important;
+    }}
+
+    /* Sidebar secondary buttons — visible on dark background */
+    section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {{
+        background-color: #333 !important;
+        color: white !important;
+        border: 1px solid #555 !important;
+        border-radius: 8px;
+    }}
+    section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]):hover {{
+        background-color: #444 !important;
+        border-color: #777 !important;
+    }}
+
+    /* Sidebar download button — visible on dark background */
+    section[data-testid="stSidebar"] .stDownloadButton > button {{
+        background-color: #333 !important;
+        color: white !important;
+        border: 1px solid #555 !important;
+    }}
+    section[data-testid="stSidebar"] .stDownloadButton > button:hover {{
+        background-color: #444 !important;
+        border-color: #777 !important;
+    }}
+
+    /* Sidebar text area — visible on dark background */
+    section[data-testid="stSidebar"] textarea {{
+        background-color: #1a1a1a !important;
+        color: white !important;
+        border-color: #444 !important;
+        border-radius: 8px;
+    }}
+    section[data-testid="stSidebar"] textarea:focus {{
+        border-color: var(--yakr-red) !important;
+        box-shadow: 0 0 0 1px var(--yakr-red) !important;
+    }}
+    section[data-testid="stSidebar"] textarea::placeholder {{
+        color: #888 !important;
+    }}
+
+    /* Sidebar radio buttons — visible on dark background */
+    section[data-testid="stSidebar"] [data-testid="stRadio"] > div {{
+        background-color: #1a1a1a;
+        border-radius: 8px;
+        padding: 8px 12px;
+        border: 1px solid #333;
+    }}
+    section[data-testid="stSidebar"] [role="radiogroup"] label {{
+        color: white !important;
+    }}
+    section[data-testid="stSidebar"] [role="radiogroup"] label > div:first-child {{
+        border-color: #666 !important;
+    }}
+    section[data-testid="stSidebar"] [role="radiogroup"] label[data-checked="true"] > div:first-child {{
+        background-color: var(--yakr-red) !important;
+        border-color: var(--yakr-red) !important;
+    }}
+
+    /* Sidebar checkbox — visible on dark background */
+    section[data-testid="stSidebar"] [data-testid="stCheckbox"] label span {{
+        color: white !important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -439,8 +517,8 @@ with st.sidebar:
     st.divider()
     st.markdown("##### Options")
 
+    st.markdown("<small style='color:#aaa;'>Greeting</small>", unsafe_allow_html=True)
     greeting = st.radio("Greeting", ["Morning", "Afternoon"], horizontal=True, label_visibility="collapsed")
-    st.markdown(f"<small style='color:#888;'>Greeting: {greeting}</small>", unsafe_allow_html=True)
 
     include_finalised = st.checkbox("Include finalised cases", value=False)
 
@@ -450,7 +528,7 @@ with st.sidebar:
             "Custom instructions",
             value=st.session_state.get("custom_instructions", ""),
             placeholder="Add special instructions (e.g., 'Use a more formal tone', 'Sign off as Sarah instead of Joe')",
-            height=100,
+            height=200,
             key="custom_instructions_input",
         )
         st.session_state["custom_instructions"] = custom_instructions
